@@ -9,7 +9,7 @@ services:
       - SERVER_HOST=server
       - SERVER_PORT=5678
 
-  client_0:
+  client_0: &client_base
     build:
       context: ./services/client
       dockerfile: Dockerfile
@@ -22,9 +22,7 @@ services:
       - SERVER_PORT=5678
   
   client_1:
-    build:
-      context: ./services/client
-      dockerfile: Dockerfile
+    <<: *client_base
     container_name: client_1
     depends_on:
       - server
@@ -34,9 +32,7 @@ services:
       - SERVER_PORT=5678
 
   client_2:
-    build:
-      context: ./services/client
-      dockerfile: Dockerfile
+    <<: *client_base
     container_name: client_2
     depends_on:
       - server
@@ -46,9 +42,7 @@ services:
       - SERVER_PORT=5678
 
   client_3:
-    build:
-      context: ./services/client
-      dockerfile: Dockerfile
+    <<: *client_base
     container_name: client_3
     depends_on:
       - server
@@ -58,9 +52,7 @@ services:
       - SERVER_PORT=5678
   
   client_4:
-    build:
-      context: ./services/client
-      dockerfile: Dockerfile
+    <<: *client_base
     container_name: client_4
     depends_on:
       - server
