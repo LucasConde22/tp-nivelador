@@ -2,6 +2,7 @@ package client
 
 import (
 	"bufio"
+	"io"
 	"net"
 	"os"
 	"time"
@@ -16,6 +17,11 @@ const CONNECTION_ATTEMPS_DELAY_MS = 200
 const ECHO_CLIENT_BUFFER_SIZE = 512
 const ECHO_CLIENT_MESSAGE_AMOUNT = 3
 const ECHO_CLIENT_MESSAGE_DELAY_MS = 1000
+
+const FILE_MESSAGE_BUFFER_SIZE = 2048
+
+const ACTION_TEST_ECHO_SERVER = "test-echo-server"
+const ACTION_PROCESS_FILE_MESSAGE = "process_file_message"
 
 type ClientConfig struct {
 	ServerHost string
@@ -63,8 +69,22 @@ func connectToServer(host, port string) (net.Conn, error) {
 }
 
 func (client *Client) Run() error {
-	const mainAction = "test-echo-server"
 	defer client.conn.Close()
+
+	if err := test_echo_server(client); err != nil {
+		// The error has already been logged within the function
+		return err
+	}
+
+	if err := process_file_messages(client); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func test_echo_server(client *Client) error {
+	const mainAction = ACTION_TEST_ECHO_SERVER
 
 	for messageId := range ECHO_CLIENT_MESSAGE_AMOUNT {
 		messageArgs := []any{"agency-id", client.config.AgencyId, "message-id", messageId}
@@ -72,14 +92,12 @@ func (client *Client) Run() error {
 
 		clientMessage := client.config.AgencyId
 
-		if err := safe_socket.SendAll(client.conn, []byte(clientMessage)); err != nil {
-			logger.Error("send-message", logger.Fail, messageArgs...)
+		if err := send_client_message(client.conn, []byte(clientMessage), messageArgs...); err != nil {
 			return err
 		}
 
-		responseBuffer, err := safe_socket.RecvAll(client.conn, ECHO_CLIENT_BUFFER_SIZE)
+		responseBuffer, err := receive_client_message(client.conn, ECHO_CLIENT_BUFFER_SIZE, messageArgs...)
 		if err != nil {
-			logger.Error("recv-response", logger.Fail, messageArgs...)
 			return err
 		}
 
@@ -92,16 +110,11 @@ func (client *Client) Run() error {
 	}
 	logger.Info(mainAction, logger.Success, "agency-id", client.config.AgencyId)
 
-	if err := process_file_messages(client, client.config.AgencyId); err != nil {
-		logger.Error("process_file_messages", logger.Fail)
-		return err
-	}
-
 	return nil
 }
 
-func process_file_messages(client *Client, agencyId string) error {
-	const mainAction = "process_file_message"
+func process_file_messages(client *Client) error { // Exercise 3
+	const mainAction = ACTION_PROCESS_FILE_MESSAGE
 
 	inputFile, err := os.Open(client.config.InputFile)
 	if err != nil {
@@ -132,14 +145,12 @@ func process_file_messages(client *Client, agencyId string) error {
 		messageArgs := []any{"agency-id", client.config.AgencyId, "message-id", messageId}
 		logger.Info(mainAction, logger.InProgress, messageArgs...)
 
-		if err := safe_socket.SendAll(client.conn, []byte(clientMessage)); err != nil {
-			logger.Error("send-message", logger.Fail, messageArgs...)
+		if err := send_client_message(client.conn, []byte(clientMessage), messageArgs...); err != nil {
 			return err
 		}
 
-		responseBuffer, err := safe_socket.RecvAll(client.conn, ECHO_CLIENT_BUFFER_SIZE)
+		responseBuffer, err := receive_client_message(client.conn, FILE_MESSAGE_BUFFER_SIZE, messageArgs...)
 		if err != nil {
-			logger.Error("recv-response", logger.Fail, messageArgs...)
 			return err
 		}
 
@@ -158,6 +169,24 @@ func process_file_messages(client *Client, agencyId string) error {
 		messageId++
 	}
 
-	logger.Info(mainAction, logger.Success, "agency-id", agencyId)
+	logger.Info(mainAction, logger.Success, "agency-id", client.config.AgencyId)
 	return nil
+}
+
+func send_client_message(socket io.Writer, message []byte, args ...any) error {
+	if err := safe_socket.SendAll(socket, message); err != nil {
+		logger.Error("send-message", logger.Fail, args)
+		return err
+	}
+
+	return nil
+}
+
+func receive_client_message(socket io.Reader, buffer_size int, args ...any) ([]byte, error) {
+	responseBuffer, err := safe_socket.RecvAll(socket, buffer_size)
+	if err != nil {
+		logger.Error("recv-response", logger.Fail, args...)
+		return nil, err
+	}
+	return responseBuffer, nil
 }
