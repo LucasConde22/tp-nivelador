@@ -1,7 +1,9 @@
 package client
 
 import (
+	"bufio"
 	"net"
+	"os"
 	"time"
 
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/logger"
@@ -20,6 +22,7 @@ type ClientConfig struct {
 	ServerPort string
 	AgencyId   string
 	InputFile  string
+	OutputFile string
 }
 
 type Client struct {
@@ -89,5 +92,72 @@ func (client *Client) Run() error {
 	}
 	logger.Info(mainAction, logger.Success, "agency-id", client.config.AgencyId)
 
+	if err := process_file_messages(client, client.config.AgencyId); err != nil {
+		logger.Error("process_file_messages", logger.Fail)
+		return err
+	}
+
+	return nil
+}
+
+func process_file_messages(client *Client, agencyId string) error {
+	const mainAction = "process_file_message"
+
+	inputFile, err := os.Open(client.config.InputFile)
+	if err != nil {
+		logger.Error("open-input-file", logger.Fail, "err", err)
+		return err
+	}
+
+	defer inputFile.Close()
+
+	outputFile, err := os.Create(client.config.OutputFile)
+	if err != nil {
+		logger.Error("open-output-file", logger.Fail, "err", err)
+		return err
+	}
+
+	defer outputFile.Close()
+
+	scanner := bufio.NewScanner(inputFile)
+	messageId := ECHO_CLIENT_MESSAGE_AMOUNT
+	for scanner.Scan() {
+		clientMessage := scanner.Text()
+
+		if err := scanner.Err(); err != nil {
+			logger.Error("scan-message-text", logger.Fail, "err", err)
+			return err
+		}
+
+		messageArgs := []any{"agency-id", client.config.AgencyId, "message-id", messageId}
+		logger.Info(mainAction, logger.InProgress, messageArgs...)
+
+		if err := safe_socket.SendAll(client.conn, []byte(clientMessage)); err != nil {
+			logger.Error("send-message", logger.Fail, messageArgs...)
+			return err
+		}
+
+		responseBuffer, err := safe_socket.RecvAll(client.conn, ECHO_CLIENT_BUFFER_SIZE)
+		if err != nil {
+			logger.Error("recv-response", logger.Fail, messageArgs...)
+			return err
+		}
+
+		_, err = outputFile.Write(responseBuffer)
+		if err != nil {
+			logger.Error("write-response", logger.Fail, messageArgs...)
+			return err
+		}
+
+		_, err = outputFile.WriteString("\n")
+		if err != nil {
+			logger.Error("write-response", logger.Fail, messageArgs...)
+			return err
+		}
+
+		messageId++
+	}
+
+	logger.Info(mainAction, logger.Success, "agency-id", agencyId)
 	return nil
 }
