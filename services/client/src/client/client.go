@@ -19,6 +19,7 @@ type ClientConfig struct {
 	ServerHost string
 	ServerPort string
 	AgencyId   string
+	InputFile  string
 }
 
 type Client struct {
