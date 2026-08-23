@@ -12,7 +12,7 @@ import (
 )
 
 const CONNECTION_ATTEMPTS_MAX = 3
-const CONNECTION_ATTEMPS_DELAY_MS = 200
+const CONNECTION_ATTEMPS_DELAY_MS = 500 // TODO: Change to an appropiate back-off algorithm
 
 const ECHO_CLIENT_BUFFER_SIZE = 512
 const ECHO_CLIENT_MESSAGE_AMOUNT = 3
@@ -96,12 +96,12 @@ func test_echo_server(client *Client) error {
 			return err
 		}
 
-		responseBuffer, err := receive_client_message(client.conn, ECHO_CLIENT_BUFFER_SIZE, messageArgs...)
+		responseBuffer, err := receive_client_message(client.conn, len(clientMessage), messageArgs...)
 		if err != nil {
 			return err
 		}
 
-		if string(responseBuffer) == clientMessage {
+		if string(responseBuffer) != clientMessage {
 			logger.Error("check-response", logger.Fail, messageArgs...)
 			return err
 		}
@@ -149,7 +149,7 @@ func process_file_messages(client *Client) error { // Exercise 3
 			return err
 		}
 
-		responseBuffer, err := receive_client_message(client.conn, FILE_MESSAGE_BUFFER_SIZE, messageArgs...)
+		responseBuffer, err := receive_client_message(client.conn, len(clientMessage), messageArgs...)
 		if err != nil {
 			return err
 		}
