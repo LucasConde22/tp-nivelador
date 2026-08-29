@@ -155,6 +155,9 @@ func processBets(client *Client) error {
 }
 
 func receiveWinners(client *Client) error {
+	betsProtocol := newBetsProtocol(client.conn)
+	betsProtocol.ReceiveWinners()
+
 	return nil
 }
 
