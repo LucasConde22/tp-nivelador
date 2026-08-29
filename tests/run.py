@@ -35,7 +35,7 @@ def main():
             print("ERROR")
             print(f"{e}", file=sys.stderr, end="\n\n")
             print(f"HINT: {test_case.error_hint}", file=sys.stderr, end="\n\n")
-            #return 1
+            return 1
     return 0
 
 

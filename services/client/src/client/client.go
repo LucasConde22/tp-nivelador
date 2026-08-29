@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/logger"
@@ -71,12 +72,22 @@ func connectToServer(host, port string) (net.Conn, error) {
 func (client *Client) Run() error {
 	defer client.conn.Close()
 
-	if err := test_echo_server(client); err != nil {
-		// The error has already been logged within the function
+	/*
+		if err := test_echo_server(client); err != nil {
+			// The error has already been logged within the function
+			return err
+		}
+
+		if err := process_file_messages(client); err != nil {
+			return err
+		}
+	*/
+
+	if err := processBets(client); err != nil {
 		return err
 	}
 
-	if err := process_file_messages(client); err != nil {
+	if err := receiveWinners(client); err != nil {
 		return err
 	}
 
@@ -110,6 +121,40 @@ func test_echo_server(client *Client) error {
 	}
 	logger.Info(mainAction, logger.Success, "agency-id", client.config.AgencyId)
 
+	return nil
+}
+
+func processBets(client *Client) error {
+	agencyId, err := strconv.Atoi(client.config.AgencyId)
+	if err != nil {
+		return err
+	}
+
+	betsProtocol := newBetsProtocol(client.conn)
+	betsReader, err := newBetsReader(agencyId, client.config.InputFile)
+	if err != nil {
+		return err
+	}
+	defer betsReader.Close()
+
+	for {
+		bet, err := betsReader.NextBet()
+		if err == io.EOF {
+			break // No hay más apuestas para enviar
+		}
+		if err != nil {
+			return err
+		}
+
+		if err := betsProtocol.SendBet(bet); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func receiveWinners(client *Client) error {
 	return nil
 }
 
