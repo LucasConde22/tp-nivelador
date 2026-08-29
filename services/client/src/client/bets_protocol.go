@@ -1,24 +1,22 @@
 package client
 
 import (
-	"encoding/binary"
 	"fmt"
-	"net"
-
-	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/safe_socket"
+	"io"
 )
 
 const (
 	MSG_TYPE_BET             = 0
 	MSG_TYPE_REQUEST_WINNERS = 1
+	MSG_TYPE_WINNER          = 2
 	DELIMITER                = "|"
 )
 
 type BetsProtocol struct {
-	conn net.Conn
+	conn Connection
 }
 
-func newBetsProtocol(conn net.Conn) *BetsProtocol {
+func NewBetsProtocol(conn Connection) *BetsProtocol {
 	return &BetsProtocol{conn}
 }
 
@@ -27,7 +25,7 @@ func (betsProtocol *BetsProtocol) SendBet(bet *Bet) error {
 		return nil
 	}
 	message := betsProtocol.buildBetMessage(bet)
-	return safe_socket.SendAll(betsProtocol.conn, message)
+	return betsProtocol.conn.SendAll(message)
 }
 
 func (betsProtocol *BetsProtocol) ReceiveWinners() ([]*Bet, error) {
@@ -35,14 +33,30 @@ func (betsProtocol *BetsProtocol) ReceiveWinners() ([]*Bet, error) {
 		return nil, err
 	}
 
-	return nil, nil
+	winners := make([]*Bet, 0)
+	for {
+		break
+		winner, err := betsProtocol.receiveWinner()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err // O devolver los ganadores hasta ahora, revisar!!!
+		}
+
+		winners = append(winners, winner)
+	}
+
+	return winners, nil
 }
 
 func (betsProtocol *BetsProtocol) requestWinners() error {
-	message := make([]byte, 5)
-	binary.BigEndian.PutUint32(message[0:4], 0) // payloadLen = 0 (there's no payload)
-	message[4] = MSG_TYPE_REQUEST_WINNERS       // Type
-	return safe_socket.SendAll(betsProtocol.conn, message)
+	message := betsProtocol.buildRequestWinnersMessage()
+	return betsProtocol.conn.SendAll(message)
+}
+
+func (betsProtocol *BetsProtocol) receiveWinner() (*Bet, error) {
+	return nil, nil
 }
 
 func (BetsProtocol) buildBetMessage(bet *Bet) []byte {
@@ -65,9 +79,23 @@ func (BetsProtocol) buildBetMessage(bet *Bet) []byte {
 
 	// 4 bytes: Payload lenght|1 byte: Type|Payload
 	message := make([]byte, 4+1+len(payloadBytes))
-	binary.BigEndian.PutUint32(message[0:4], payloadLen)
+	insertUint32IntoByteArray(message[0:4], payloadLen)
 	message[4] = MSG_TYPE_BET
 	copy(message[5:], payloadBytes)
 
 	return message
+}
+
+func (BetsProtocol) buildRequestWinnersMessage() []byte {
+	message := make([]byte, 5)
+	insertUint32IntoByteArray(message[0:4], 0) // payloadLen = 0 (there's no payload)
+	message[4] = MSG_TYPE_REQUEST_WINNERS      // Type
+	return message
+}
+
+func insertUint32IntoByteArray(array []byte, integer uint32) {
+	array[0] = byte(integer >> 24)
+	array[1] = byte(integer >> 16)
+	array[2] = byte(integer >> 8)
+	array[3] = byte(integer)
 }

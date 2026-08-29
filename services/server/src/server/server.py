@@ -1,34 +1,36 @@
 import socket
 import logger
-import safe_socket
+from lottery import Lottery
+from .bets_protocol import BetsProtocol, MSG_TYPE_BET, MSG_TYPE_REQUEST_WINNERS
 
-_ECHO_SERVER_MESSAGE_SIZE = 1024
+_STORAGE_PATH = "/output/bets.csv"
 
 
 class Server:
-    def __init__(self, server_host: str, server_port: int) -> None:
+    def __init__(self, server_host: str, server_port: int, storage_path: str = _STORAGE_PATH) -> None:
         self.server_host = server_host
         self.server_port = server_port
+        self.storage_path = storage_path
+        self.lottery = Lottery(self.storage_path)
 
     def _handle_client(self, client_socket):
         action = "handle-client"
         message_amount = 0
+        protocol = BetsProtocol(client_socket)
         try:
-            logger.info(action, logger.LogResult.in_progress)
             while True:
-                client_message = safe_socket.recv_all(
-                    client_socket, _ECHO_SERVER_MESSAGE_SIZE
-                )
-                if not client_message:
-                    logger.info(
-                        action,
-                        logger.LogResult.success,
-                        "messages-amount",
-                        message_amount,
-                    )
+                msg_type, data = protocol.receive_message()
+                if msg_type is None:
                     return
+
                 message_amount += 1
-                safe_socket.send_all(client_socket, client_message)
+
+                if msg_type == MSG_TYPE_BET:
+                    self.lottery.store_bets([data])
+                elif msg_type == MSG_TYPE_REQUEST_WINNERS:
+                    winners = [bet for bet in self.lottery.load_bets() if self.lottery.has_won(bet)]
+                    #for winner in winners:
+                        # protocol.send_winner(winner)
         except Exception as e:
             logger.error(
                 action, logger.LogResult.fail, "messages-amount", message_amount

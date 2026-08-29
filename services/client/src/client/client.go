@@ -130,7 +130,7 @@ func processBets(client *Client) error {
 		return err
 	}
 
-	betsProtocol := newBetsProtocol(client.conn)
+	betsProtocol := NewBetsProtocol(newSocketConnection(client.conn))
 	betsReader, err := newBetsReader(agencyId, client.config.InputFile)
 	if err != nil {
 		return err
@@ -155,7 +155,7 @@ func processBets(client *Client) error {
 }
 
 func receiveWinners(client *Client) error {
-	betsProtocol := newBetsProtocol(client.conn)
+	betsProtocol := NewBetsProtocol(newSocketConnection(client.conn))
 	betsProtocol.ReceiveWinners()
 
 	return nil
