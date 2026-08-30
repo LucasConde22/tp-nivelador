@@ -3,6 +3,8 @@ package client
 import (
 	"fmt"
 	"io"
+	"strconv"
+	"strings"
 )
 
 const (
@@ -35,7 +37,6 @@ func (betsProtocol *BetsProtocol) ReceiveWinners() ([]*Bet, error) {
 
 	winners := make([]*Bet, 0)
 	for {
-		break
 		winner, err := betsProtocol.receiveWinner()
 		if err == io.EOF {
 			break
@@ -56,7 +57,59 @@ func (betsProtocol *BetsProtocol) requestWinners() error {
 }
 
 func (betsProtocol *BetsProtocol) receiveWinner() (*Bet, error) {
-	return nil, nil
+	header, err := betsProtocol.conn.RecvAll(5)
+	if err != nil {
+		return nil, err
+	}
+
+	payloadLen := extractUint32FromByteArray(header[0:4])
+
+	payloadBytes, err := betsProtocol.conn.RecvAll(int(payloadLen))
+	if err != nil {
+		return nil, err
+	}
+
+	return parseBetFromPayload(string(payloadBytes))
+}
+
+func parseBetFromPayload(payload string) (*Bet, error) {
+	parts := strings.Split(payload, DELIMITER)
+	if len(parts) != 6 {
+		return nil, fmt.Errorf("error")
+	}
+
+	agencyId, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return nil, err
+	}
+
+	firstName := parts[1]
+	lastName := parts[2]
+
+	document, err := strconv.Atoi(parts[3])
+	if err != nil {
+		return nil, err
+	}
+
+	birthdate := parts[4]
+
+	number, err := strconv.Atoi(parts[5])
+	if err != nil {
+		return nil, err
+	}
+
+	return &Bet{
+		agency_id:  agencyId,
+		first_name: firstName,
+		last_name:  lastName,
+		document:   document,
+		birthdate:  birthdate,
+		number:     number,
+	}, nil
+}
+
+func extractUint32FromByteArray(array []byte) uint32 {
+	return uint32(array[0])<<24 | uint32(array[1])<<16 | uint32(array[2])<<8 | uint32(array[3])
 }
 
 func (BetsProtocol) buildBetMessage(bet *Bet) []byte {

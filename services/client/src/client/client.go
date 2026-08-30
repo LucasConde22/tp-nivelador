@@ -72,22 +72,7 @@ func connectToServer(host, port string) (net.Conn, error) {
 func (client *Client) Run() error {
 	defer client.conn.Close()
 
-	/*
-		if err := test_echo_server(client); err != nil {
-			// The error has already been logged within the function
-			return err
-		}
-
-		if err := process_file_messages(client); err != nil {
-			return err
-		}
-	*/
-
 	if err := processBets(client); err != nil {
-		return err
-	}
-
-	if err := receiveWinners(client); err != nil {
 		return err
 	}
 
@@ -131,14 +116,26 @@ func processBets(client *Client) error {
 	}
 
 	betsProtocol := NewBetsProtocol(newSocketConnection(client.conn))
-	betsReader, err := newBetsReader(agencyId, client.config.InputFile)
+	betsIOHandler, err := NewBetsIOHandler(agencyId, client.config.InputFile, client.config.OutputFile)
 	if err != nil {
 		return err
 	}
-	defer betsReader.Close()
+	defer betsIOHandler.Close()
 
+	if err := sendBets(betsIOHandler, betsProtocol); err != nil {
+		return err
+	}
+
+	if err := receiveWinners(betsIOHandler, betsProtocol); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func sendBets(betsReader *BetsIOHandler, betsProtocol *BetsProtocol) error {
 	for {
-		bet, err := betsReader.NextBet()
+		bet, err := betsReader.ReadNextBet()
 		if err == io.EOF {
 			break // No hay más apuestas para enviar
 		}
@@ -154,9 +151,17 @@ func processBets(client *Client) error {
 	return nil
 }
 
-func receiveWinners(client *Client) error {
-	betsProtocol := NewBetsProtocol(newSocketConnection(client.conn))
-	betsProtocol.ReceiveWinners()
+func receiveWinners(betsWriter *BetsIOHandler, betsProtocol *BetsProtocol) error {
+	winners, err := betsProtocol.ReceiveWinners()
+	if err != nil {
+		return err
+	}
+
+	for _, winner := range winners {
+		if err := betsWriter.WriteBet(winner); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }

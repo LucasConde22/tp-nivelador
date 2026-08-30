@@ -17,25 +17,43 @@ class Server:
         action = "handle-client"
         message_amount = 0
         protocol = BetsProtocol(client_socket)
+        agency_id = None
         try:
+            logger.info(action, logger.LogResult.in_progress)
             while True:
                 msg_type, data = protocol.receive_message()
                 if msg_type is None:
+                    logger.info(
+                        action,
+                        logger.LogResult.success,
+                        "messages-amount",
+                        message_amount,
+                    )
                     return
 
                 message_amount += 1
 
                 if msg_type == MSG_TYPE_BET:
+                    agency_id = data.agency_id
                     self.lottery.store_bets([data])
                 elif msg_type == MSG_TYPE_REQUEST_WINNERS:
-                    winners = [bet for bet in self.lottery.load_bets() if self.lottery.has_won(bet)]
-                    #for winner in winners:
-                        # protocol.send_winner(winner)
+                    for bet in self.lottery.load_bets():
+                        if self.lottery.has_won(bet) and (agency_id is None or bet.agency_id == agency_id):
+                            protocol.send_winner(bet)
+                    logger.info(
+                        action,
+                        logger.LogResult.success,
+                        "messages-amount",
+                        message_amount,
+                    )
+                    return
         except Exception as e:
             logger.error(
                 action, logger.LogResult.fail, "messages-amount", message_amount
             )
             raise e
+        finally:
+            client_socket.close()
 
     def run(self):
         action = "accept-connection"
