@@ -2,3 +2,4 @@ __pycache__/
 /output/
 /input/
 /tests/
+failed_test.log

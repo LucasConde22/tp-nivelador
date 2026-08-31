@@ -1,7 +1,7 @@
 import socket
 import logger
 from lottery import Lottery
-from .bets_protocol import BetsProtocol, MSG_TYPE_BET, MSG_TYPE_REQUEST_WINNERS
+from .bets_protocol import BetsProtocol, MSG_TYPE_BET, MSG_TYPE_REQUEST_WINNERS, MSG_TYPE_MULTI_BETS
 
 STORAGE_PATH = "./bets.csv"
 ACTION_HANDLE_CLIENT = "handle-client"
@@ -48,9 +48,11 @@ class Server:
 
             message_amount += 1
 
-            if msg_type == MSG_TYPE_BET:
-                agency_id = data.agency_id
-                self.lottery.store_bets([data])
+            if msg_type == MSG_TYPE_BET or msg_type == MSG_TYPE_MULTI_BETS:
+                if isinstance(data, list) and data:
+                    agency_id = data[0].agency_id
+                self.lottery.store_bets(data)
+
             elif msg_type == MSG_TYPE_REQUEST_WINNERS:
                 for bet in self.lottery.load_bets():
                     if self.lottery.has_won(bet) and (agency_id is None or bet.agency_id == agency_id):
