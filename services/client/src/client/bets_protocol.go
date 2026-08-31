@@ -10,13 +10,18 @@ import (
 
 const (
 	MSG_TYPE_BET             = 0
-	MSG_TYPE_REQUEST_WINNERS = 1
-	MSG_TYPE_WINNER          = 2
+	MSG_TYPE_MULTI_BETS      = 1
+	MSG_TYPE_REQUEST_WINNERS = 2
+	MSG_TYPE_WINNER          = 3
 	DELIMITER                = "|"
 
-	HEADER_PAYLOAD_LEN_SIZE  = 4
-	HEADER_TYPE_SIZE         = 1
-	HEADER_SIZE              = HEADER_PAYLOAD_LEN_SIZE + HEADER_TYPE_SIZE
+	HEADER_PAYLOAD_LEN_SIZE = 4
+	HEADER_TYPE_SIZE        = 1
+	HEADER_SIZE             = HEADER_PAYLOAD_LEN_SIZE + HEADER_TYPE_SIZE
+
+	HEADER_NO_BETS_SIZE    = 4                                 // Bytes indicating the number of bets
+	HEADER_MULTI_BETS_SIZE = HEADER_SIZE + HEADER_NO_BETS_SIZE // Header size when multiple bets are sent
+
 	BET_PAYLOAD_PARTS_AMOUNT = 6
 )
 
@@ -28,8 +33,13 @@ func NewBetsProtocol(conn Connection) *BetsProtocol {
 	return &BetsProtocol{conn}
 }
 
-func (betsProtocol *BetsProtocol) SendBet(bet *Bet) error {
+func (betsProtocol *BetsProtocol) SendBet(bet *Bet) error { // Used for exercise 5
 	message := betsProtocol.buildBetMessage(bet)
+	return betsProtocol.conn.SendAll(message)
+}
+
+func (betsProtocol *BetsProtocol) SendBets(bets []*Bet) error {
+	message := betsProtocol.buildBetsMessage(bets)
 	return betsProtocol.conn.SendAll(message)
 }
 
@@ -72,10 +82,10 @@ func (betsProtocol *BetsProtocol) receiveWinner() (*Bet, error) {
 		return nil, err
 	}
 
-	return parseBetFromPayload(string(payloadBytes))
+	return betsProtocol.parseBetFromPayload(string(payloadBytes))
 }
 
-func parseBetFromPayload(payload string) (*Bet, error) {
+func (BetsProtocol) parseBetFromPayload(payload string) (*Bet, error) {
 	parts := strings.Split(payload, DELIMITER)
 	if len(parts) != BET_PAYLOAD_PARTS_AMOUNT {
 		return nil, errors.New(MSG_ERROR_INVALID_LINE)
@@ -111,10 +121,8 @@ func parseBetFromPayload(payload string) (*Bet, error) {
 	}, nil
 }
 
-func (BetsProtocol) buildBetMessage(bet *Bet) []byte {
-	payload := fmt.Sprintf("%d%s%s%s%s%s%d%s%s%s%d",
-		bet.agency_id,
-		DELIMITER,
+func (BetsProtocol) formatBetFields(bet *Bet) string {
+	return fmt.Sprintf("%s%s%s%s%d%s%s%s%d",
 		bet.first_name,
 		DELIMITER,
 		bet.last_name,
@@ -125,15 +133,47 @@ func (BetsProtocol) buildBetMessage(bet *Bet) []byte {
 		DELIMITER,
 		bet.number,
 	)
+}
 
+func (betsProtocol BetsProtocol) buildBetMessage(bet *Bet) []byte {
+	if bet == nil {
+		return nil
+	}
+
+	payload := fmt.Sprintf("%d%s%s", bet.agency_id, DELIMITER, betsProtocol.formatBetFields(bet))
 	payloadBytes := []byte(payload)
 	payloadLen := uint32(len(payloadBytes))
 
-	// 4 bytes: Payload lenght|1 byte: Type|Payload
+	// [4 bytes: Payload lenght|1 byte: Type|N Bytes: Payload]
 	message := make([]byte, HEADER_SIZE+len(payloadBytes))
 	insertUint32IntoByteArray(message[0:HEADER_PAYLOAD_LEN_SIZE], payloadLen)
 	message[HEADER_PAYLOAD_LEN_SIZE] = MSG_TYPE_BET
 	copy(message[HEADER_SIZE:], payloadBytes)
+
+	return message
+}
+
+func (betsProtocol BetsProtocol) buildBetsMessage(bets []*Bet) []byte {
+	if len(bets) == 0 {
+		return nil
+	}
+
+	betStrings := make([]string, len(bets))
+	for i, bet := range bets {
+		betStrings[i] = betsProtocol.formatBetFields(bet)
+	}
+
+	payload := fmt.Sprintf("%d%s%s", bets[0].agency_id, DELIMITER, strings.Join(betStrings, DELIMITER))
+	payloadBytes := []byte(payload)
+	payloadLen := uint32(len(payloadBytes))
+	numberOfBets := uint32(len(bets))
+
+	// [4 bytes: Payload lenght|1 byte: Type|4 bytes: Number of bets|N Bytes: Payload]
+	message := make([]byte, HEADER_MULTI_BETS_SIZE+len(payloadBytes))
+	insertUint32IntoByteArray(message[0:HEADER_PAYLOAD_LEN_SIZE], payloadLen)
+	message[HEADER_PAYLOAD_LEN_SIZE] = MSG_TYPE_MULTI_BETS
+	insertUint32IntoByteArray(message[HEADER_SIZE:HEADER_MULTI_BETS_SIZE], numberOfBets)
+	copy(message[HEADER_MULTI_BETS_SIZE:], payloadBytes)
 
 	return message
 }

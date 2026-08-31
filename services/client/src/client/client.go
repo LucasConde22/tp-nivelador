@@ -26,6 +26,7 @@ type ClientConfig struct {
 	AgencyId   string
 	InputFile  string
 	OutputFile string
+	BatchSize  string
 }
 
 type Client struct {
@@ -84,6 +85,12 @@ func processBets(client *Client) error {
 		return err
 	}
 
+	batchSize, err := strconv.Atoi(client.config.BatchSize)
+	if err != nil {
+		logger.Error("batchSize", logger.Fail, "err", err, "agency-id", agencyIdStr)
+		return err
+	}
+
 	betsProtocol := NewBetsProtocol(newSocketConnection(client.conn))
 	betsIOHandler, err := NewBetsIOHandler(agencyId, client.config.InputFile, client.config.OutputFile)
 	if err != nil {
@@ -94,7 +101,7 @@ func processBets(client *Client) error {
 
 	logger.Info(mainAction, logger.InProgress, "agency-id", agencyIdStr)
 
-	if err := sendBets(betsIOHandler, betsProtocol, agencyIdStr); err != nil {
+	if err := sendBets(betsIOHandler, betsProtocol, agencyIdStr, batchSize); err != nil {
 		return err
 	}
 
@@ -106,26 +113,42 @@ func processBets(client *Client) error {
 	return nil
 }
 
-func sendBets(betsReader *BetsIOHandler, betsProtocol *BetsProtocol, agencyId string) error {
+func sendBets(betsReader *BetsIOHandler, betsProtocol *BetsProtocol, agencyId string, batchSize int) error {
 	const action = ACTION_SEND_BETS
 	logger.Info(action, logger.InProgress, "agency-id", agencyId)
 
 	betsSent := 0
+	betsToSend := make([]*Bet, 0, batchSize)
+	allSent := false
+
 	for {
-		bet, err := betsReader.ReadNextBet()
-		if err == io.EOF {
-			break // No hay más apuestas para enviar
-		}
-		if err != nil {
-			logger.Error("read-bet", logger.Fail, "err", err, "agency-id", agencyId)
-			return err
+		betsToSend = betsToSend[:0] // Resets lenght to 0 but keeping its capacity
+
+		for len(betsToSend) < batchSize {
+			bet, err := betsReader.ReadNextBet()
+			if err == io.EOF {
+				allSent = true
+				break // No more bets to read
+			}
+			if err != nil {
+				logger.Error("read-bet", logger.Fail, "err", err, "agency-id", agencyId)
+				return err
+			}
+
+			betsToSend = append(betsToSend, bet)
 		}
 
-		if err := betsProtocol.SendBet(bet); err != nil {
-			logger.Error("send-bet", logger.Fail, "err", err, "agency-id", agencyId)
-			return err
+		if len(betsToSend) > 0 {
+			if err := betsProtocol.SendBets(betsToSend); err != nil {
+				logger.Error("send-bet", logger.Fail, "err", err, "agency-id", agencyId)
+				return err
+			}
+			betsSent += len(betsToSend)
 		}
-		betsSent++
+
+		if allSent {
+			break
+		}
 	}
 
 	logger.Info(action, logger.Success, "agency-id", agencyId, "bets-amount", betsSent)

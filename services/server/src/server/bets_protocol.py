@@ -3,8 +3,9 @@ import safe_socket
 from lottery import Bet
 
 MSG_TYPE_BET = 0
-MSG_TYPE_REQUEST_WINNERS = 1
-MSG_TYPE_WINNER = 2
+MSG_TYPE_MULTI_BETS = 1
+MSG_TYPE_REQUEST_WINNERS = 2
+MSG_TYPE_WINNER = 3
 
 DELIMITER = "|"
 ENCODING = "utf-8"
