@@ -9,12 +9,16 @@ import (
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/logger"
 )
 
-const CONNECTION_ATTEMPTS_MAX = 3
-const CONNECTION_ATTEMPS_DELAY_MS = 500 // TODO: Change to an appropiate back-off algorithm
+const (
+	CONNECTION_ATTEMPTS_MAX     = 3
+	CONNECTION_ATTEMPS_DELAY_MS = 500 // TODO: Change to an appropiate back-off algorithm
+	NETWORK_PROTOCOL            = "tcp"
 
-const ACTION_PROCESS_BETS = "process-bets"
-const ACTION_SEND_BETS = "process-bets"
-const ACTION_RECEIVE_WINNERS = "process-bets"
+	ACTION_CONNECT_TO_SERVER = "connect-to-server"
+	ACTION_PROCESS_BETS      = "process-bets"
+	ACTION_SEND_BETS         = "send-bets"
+	ACTION_RECEIVE_WINNERS   = "receive-winners"
+)
 
 type ClientConfig struct {
 	ServerHost string
@@ -32,7 +36,7 @@ type Client struct {
 func NewClient(config ClientConfig) (*Client, error) {
 	conn, err := connectToServer(config.ServerHost, config.ServerPort)
 	if err != nil {
-		logger.Warn("connect-to-server", logger.Fail)
+		logger.Warn(ACTION_CONNECT_TO_SERVER, logger.Fail)
 		return nil, err
 	}
 
@@ -41,20 +45,19 @@ func NewClient(config ClientConfig) (*Client, error) {
 }
 
 func connectToServer(host, port string) (net.Conn, error) {
-	const action = "connect-to-server"
 	var err error
 	var conn net.Conn
 
-	logger.Info(action, logger.InProgress)
+	logger.Info(ACTION_CONNECT_TO_SERVER, logger.InProgress)
 	for i := range CONNECTION_ATTEMPTS_MAX {
-		conn, err = net.Dial("tcp", host+":"+port)
+		conn, err = net.Dial(NETWORK_PROTOCOL, host+":"+port)
 		if err != nil {
-			logger.Warn(action, logger.Fail, "attempt", i)
+			logger.Warn(ACTION_CONNECT_TO_SERVER, logger.Fail, "attempt", i)
 			time.Sleep(CONNECTION_ATTEMPS_DELAY_MS * time.Millisecond)
 			continue
 		}
 
-		logger.Info(action, logger.Success)
+		logger.Info(ACTION_CONNECT_TO_SERVER, logger.Success)
 		break
 	}
 

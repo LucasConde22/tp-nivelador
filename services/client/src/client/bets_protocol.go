@@ -13,6 +13,11 @@ const (
 	MSG_TYPE_REQUEST_WINNERS = 1
 	MSG_TYPE_WINNER          = 2
 	DELIMITER                = "|"
+
+	HEADER_PAYLOAD_LEN_SIZE  = 4
+	HEADER_TYPE_SIZE         = 1
+	HEADER_SIZE              = HEADER_PAYLOAD_LEN_SIZE + HEADER_TYPE_SIZE
+	BET_PAYLOAD_PARTS_AMOUNT = 6
 )
 
 type BetsProtocol struct {
@@ -55,12 +60,12 @@ func (betsProtocol *BetsProtocol) requestWinners() error {
 }
 
 func (betsProtocol *BetsProtocol) receiveWinner() (*Bet, error) {
-	header, err := betsProtocol.conn.RecvAll(5)
+	header, err := betsProtocol.conn.RecvAll(HEADER_SIZE)
 	if err != nil {
 		return nil, err
 	}
 
-	payloadLen := extractUint32FromByteArray(header[0:4])
+	payloadLen := extractUint32FromByteArray(header[:HEADER_PAYLOAD_LEN_SIZE])
 
 	payloadBytes, err := betsProtocol.conn.RecvAll(int(payloadLen))
 	if err != nil {
@@ -72,7 +77,7 @@ func (betsProtocol *BetsProtocol) receiveWinner() (*Bet, error) {
 
 func parseBetFromPayload(payload string) (*Bet, error) {
 	parts := strings.Split(payload, DELIMITER)
-	if len(parts) != 6 {
+	if len(parts) != BET_PAYLOAD_PARTS_AMOUNT {
 		return nil, errors.New(MSG_ERROR_INVALID_LINE)
 	}
 
@@ -125,18 +130,18 @@ func (BetsProtocol) buildBetMessage(bet *Bet) []byte {
 	payloadLen := uint32(len(payloadBytes))
 
 	// 4 bytes: Payload lenght|1 byte: Type|Payload
-	message := make([]byte, 4+1+len(payloadBytes))
-	insertUint32IntoByteArray(message[0:4], payloadLen)
-	message[4] = MSG_TYPE_BET
-	copy(message[5:], payloadBytes)
+	message := make([]byte, HEADER_SIZE+len(payloadBytes))
+	insertUint32IntoByteArray(message[0:HEADER_PAYLOAD_LEN_SIZE], payloadLen)
+	message[HEADER_PAYLOAD_LEN_SIZE] = MSG_TYPE_BET
+	copy(message[HEADER_SIZE:], payloadBytes)
 
 	return message
 }
 
 func (BetsProtocol) buildRequestWinnersMessage() []byte {
-	message := make([]byte, 5)
-	insertUint32IntoByteArray(message[0:4], 0) // payloadLen = 0 (there's no payload)
-	message[4] = MSG_TYPE_REQUEST_WINNERS      // Type
+	message := make([]byte, HEADER_SIZE)
+	insertUint32IntoByteArray(message[0:HEADER_PAYLOAD_LEN_SIZE], 0) // payloadLen = 0 (there's no payload)
+	message[HEADER_PAYLOAD_LEN_SIZE] = MSG_TYPE_REQUEST_WINNERS      // Type
 	return message
 }
 

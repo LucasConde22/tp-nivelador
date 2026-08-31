@@ -11,7 +11,8 @@ import (
 )
 
 const (
-	SEPARATOR              = ","
+	CSV_SEPARATOR          = ","
+	BET_FILE_FIELDS_AMOUNT = 5
 	MSG_ERROR_INVALID_LINE = "The line does not have enough parts to represent a bet"
 )
 
@@ -55,7 +56,7 @@ func (reader BetsIOHandler) ReadNextBet() (*Bet, error) {
 }
 
 func (reader *BetsIOHandler) WriteBet(bet *Bet) error {
-	line := fmt.Sprintf("%s%s%s%s%d%s%s%s%d\n", bet.first_name, SEPARATOR, bet.last_name, SEPARATOR, bet.document, SEPARATOR, bet.birthdate, SEPARATOR, bet.number)
+	line := fmt.Sprintf("%s%s%s%s%d%s%s%s%d\n", bet.first_name, CSV_SEPARATOR, bet.last_name, CSV_SEPARATOR, bet.document, CSV_SEPARATOR, bet.birthdate, CSV_SEPARATOR, bet.number)
 	_, err := reader.output_file.WriteString(line)
 	return err
 }
@@ -76,8 +77,8 @@ func (reader BetsIOHandler) newBetFromText(readBet string) (*Bet, error) {
 		return nil, io.EOF
 	}
 
-	parts := strings.Split(line, SEPARATOR)
-	if len(parts) != 5 {
+	parts := strings.Split(line, CSV_SEPARATOR)
+	if len(parts) != BET_FILE_FIELDS_AMOUNT {
 		return nil, errors.New(MSG_ERROR_INVALID_LINE)
 	}
 
