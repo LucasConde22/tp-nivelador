@@ -1,6 +1,7 @@
 package client
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -23,9 +24,6 @@ func NewBetsProtocol(conn Connection) *BetsProtocol {
 }
 
 func (betsProtocol *BetsProtocol) SendBet(bet *Bet) error {
-	if bet == nil {
-		return nil
-	}
 	message := betsProtocol.buildBetMessage(bet)
 	return betsProtocol.conn.SendAll(message)
 }
@@ -75,7 +73,7 @@ func (betsProtocol *BetsProtocol) receiveWinner() (*Bet, error) {
 func parseBetFromPayload(payload string) (*Bet, error) {
 	parts := strings.Split(payload, DELIMITER)
 	if len(parts) != 6 {
-		return nil, fmt.Errorf("error")
+		return nil, errors.New(MSG_ERROR_INVALID_LINE)
 	}
 
 	agencyId, err := strconv.Atoi(parts[0])
@@ -106,10 +104,6 @@ func parseBetFromPayload(payload string) (*Bet, error) {
 		birthdate:  birthdate,
 		number:     number,
 	}, nil
-}
-
-func extractUint32FromByteArray(array []byte) uint32 {
-	return uint32(array[0])<<24 | uint32(array[1])<<16 | uint32(array[2])<<8 | uint32(array[3])
 }
 
 func (BetsProtocol) buildBetMessage(bet *Bet) []byte {
@@ -144,6 +138,10 @@ func (BetsProtocol) buildRequestWinnersMessage() []byte {
 	insertUint32IntoByteArray(message[0:4], 0) // payloadLen = 0 (there's no payload)
 	message[4] = MSG_TYPE_REQUEST_WINNERS      // Type
 	return message
+}
+
+func extractUint32FromByteArray(array []byte) uint32 {
+	return uint32(array[0])<<24 | uint32(array[1])<<16 | uint32(array[2])<<8 | uint32(array[3])
 }
 
 func insertUint32IntoByteArray(array []byte, integer uint32) {
