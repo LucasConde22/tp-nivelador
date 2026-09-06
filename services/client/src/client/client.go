@@ -143,6 +143,7 @@ func sendBets(betsReader *BetsIOHandler, betsProtocol *BetsProtocol, agencyId st
 				logger.Error("send-bet", logger.Fail, "err", err, "agency-id", agencyId)
 				return err
 			}
+
 			betsSent += len(betsToSend)
 		}
 

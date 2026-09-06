@@ -13,6 +13,7 @@ const (
 	MSG_TYPE_MULTI_BETS      = 1
 	MSG_TYPE_REQUEST_WINNERS = 2
 	MSG_TYPE_WINNER          = 3
+	MSG_TYPE_ACK             = 4
 	DELIMITER                = "|"
 
 	HEADER_PAYLOAD_LEN_SIZE = 4
@@ -23,6 +24,9 @@ const (
 	HEADER_MULTI_BETS_SIZE = HEADER_SIZE + HEADER_NO_BETS_SIZE // Header size when multiple bets are sent
 
 	BET_PAYLOAD_PARTS_AMOUNT = 6
+
+	MSG_ERROR_COULD_NOT_BUILD_MSG = "Message could not be built"
+	MSG_ERROR_DID_NOT_RECEIVE_ACK = "Didn't receive ack message"
 )
 
 type BetsProtocol struct {
@@ -35,12 +39,24 @@ func NewBetsProtocol(conn Connection) *BetsProtocol {
 
 func (betsProtocol *BetsProtocol) SendBet(bet *Bet) error { // Used for exercise 5
 	message := betsProtocol.buildBetMessage(bet)
+	if message == nil {
+		return errors.New(MSG_ERROR_COULD_NOT_BUILD_MSG)
+	}
+
 	return betsProtocol.conn.SendAll(message)
 }
 
 func (betsProtocol *BetsProtocol) SendBets(bets []*Bet) error {
 	message := betsProtocol.buildBetsMessage(bets)
-	return betsProtocol.conn.SendAll(message)
+	if message == nil {
+		return errors.New(MSG_ERROR_COULD_NOT_BUILD_MSG)
+	}
+
+	if err := betsProtocol.conn.SendAll(message); err != nil {
+		return err
+	}
+
+	return betsProtocol.receiveAck()
 }
 
 func (betsProtocol *BetsProtocol) ReceiveWinners() ([]*Bet, error) {
@@ -55,7 +71,7 @@ func (betsProtocol *BetsProtocol) ReceiveWinners() ([]*Bet, error) {
 			break
 		}
 		if err != nil {
-			return nil, err // O devolver los ganadores hasta ahora, revisar!!!
+			return nil, err // Discards "partial" winners.
 		}
 
 		winners = append(winners, winner)
@@ -70,7 +86,7 @@ func (betsProtocol *BetsProtocol) requestWinners() error {
 }
 
 func (betsProtocol *BetsProtocol) receiveWinner() (*Bet, error) {
-	header, err := betsProtocol.conn.RecvAll(HEADER_SIZE)
+	header, err := betsProtocol.receiveHeader()
 	if err != nil {
 		return nil, err
 	}
@@ -83,6 +99,25 @@ func (betsProtocol *BetsProtocol) receiveWinner() (*Bet, error) {
 	}
 
 	return betsProtocol.parseBetFromPayload(string(payloadBytes))
+}
+
+func (betsProtocol *BetsProtocol) receiveAck() error {
+	header, err := betsProtocol.receiveHeader()
+	if err != nil {
+		return err
+	}
+
+	msgType := header[HEADER_PAYLOAD_LEN_SIZE]
+
+	if msgType == MSG_TYPE_ACK {
+		return nil
+	}
+
+	return errors.New(MSG_ERROR_DID_NOT_RECEIVE_ACK)
+}
+
+func (betsProtocol *BetsProtocol) receiveHeader() ([]byte, error) {
+	return betsProtocol.conn.RecvAll(HEADER_SIZE)
 }
 
 func (BetsProtocol) parseBetFromPayload(payload string) (*Bet, error) {

@@ -6,6 +6,7 @@ MSG_TYPE_BET = 0
 MSG_TYPE_MULTI_BETS = 1
 MSG_TYPE_REQUEST_WINNERS = 2
 MSG_TYPE_WINNER = 3
+MSG_TYPE_ACK = 4
 
 DELIMITER = "|"
 ENCODING = "utf-8"
@@ -18,7 +19,6 @@ BYTE_ORDER: Literal["big", "little"] = "big"
 
 BET_PAYLOAD_FIELDS_AMOUNT = 6
 BET_FIELDS_AMOUNT = 5
-
 
 class BetsProtocol:
     def __init__(self, socket) -> None:
@@ -35,7 +35,7 @@ class BetsProtocol:
                 return None, None
             return MSG_TYPE_MULTI_BETS, bets
 
-        if msg_type == MSG_TYPE_BET:
+        if msg_type == MSG_TYPE_BET: # Used for exercise 5
             bet = self._receive_bet(payload_len)
             if bet is None:
                 return None, None
@@ -46,6 +46,14 @@ class BetsProtocol:
 
         payload = self._receive_payload(payload_len)
         return msg_type, payload
+
+    def send_winner(self, bet: Bet) -> int | None:
+        msg = self._serialize_bet(bet)
+        safe_socket.send_all(self.socket, msg)
+
+    def send_ack(self) -> int | None:
+        msg = self._build_ack_msg()
+        safe_socket.send_all(self.socket, msg)
 
     def _receive_header(self) -> tuple[int, int] | tuple[None, None]:
         header = safe_socket.recv_all(self.socket, HEADER_SIZE)
@@ -81,9 +89,8 @@ class BetsProtocol:
             return None
         return self._deserialize_bets(payload.decode(ENCODING), number_of_bets)
 
-    def send_winner(self, bet: Bet):
-        msg = self._serialize_bet(bet)
-        safe_socket.send_all(self.socket, msg)
+    def _build_ack_msg(self) -> bytes:
+        return (0).to_bytes(HEADER_PAYLOAD_LEN_SIZE, BYTE_ORDER) + bytes([MSG_TYPE_ACK])
 
     def _deserialize_bet(self, payload: str) -> Bet:
         parts = payload.split(DELIMITER)

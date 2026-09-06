@@ -52,6 +52,7 @@ class Server:
                 if isinstance(data, list) and data:
                     agency_id = data[0].agency_id
                 self.lottery.store_bets(data)
+                protocol.send_ack() # Let's the client know that all bets were processed
 
             elif msg_type == MSG_TYPE_REQUEST_WINNERS:
                 for bet in self.lottery.load_bets():
