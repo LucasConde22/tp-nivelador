@@ -1,5 +1,5 @@
 import socket
-import threading
+from threading import Barrier, Thread
 import logger
 from lottery import Lottery
 from .bets_protocol import BetsProtocol, MSG_TYPE_BET, MSG_TYPE_REQUEST_WINNERS, MSG_TYPE_MULTI_BETS
@@ -8,14 +8,14 @@ STORAGE_PATH = "./bets.csv"
 ACTION_HANDLE_CLIENT = "handle-client"
 ACTION_ACCEPT_CONNECTION = "accept-connection"
 LOG_FIELD_MESSAGES_AMOUNT = "messages-amount"
-MSG_INVALID_BATCH = 'invalid o incomplete batch'
+MSG_INVALID_BATCH = 'invalid or incomplete batch'
 
 class Server:
-    def __init__(self, server_host: str, server_port: int, storage_path: str = STORAGE_PATH) -> None:
+    def __init__(self, server_host: str, server_port: int, agency_quorum_min: int, storage_path: str = STORAGE_PATH) -> None:
         self.server_host = server_host
         self.server_port = server_port
-        self.storage_path = storage_path
-        self.lottery = Lottery(self.storage_path)
+        self.lottery = Lottery(storage_path)
+        self.quorum_barrier = Barrier(agency_quorum_min)
 
     def _handle_client(self, client_socket):
         message_amount = 0
@@ -59,6 +59,7 @@ class Server:
                 protocol.send_ack() # Let's the client know that all bets were processed
 
             elif msg_type == MSG_TYPE_REQUEST_WINNERS:
+                self.quorum_barrier.wait()
                 for bet in self.lottery.load_bets():
                     if self.lottery.has_won(bet) and (agency_id is None or bet.agency_id == agency_id):
                         protocol.send_winner(bet)
@@ -78,5 +79,5 @@ class Server:
                     logger.error(ACTION_ACCEPT_CONNECTION, logger.LogResult.fail)
                     raise e
                 logger.info(ACTION_ACCEPT_CONNECTION, logger.LogResult.success)
-                hilo = threading.Thread(target=self._handle_client, args=(client_socket,))
+                hilo = Thread(target=self._handle_client, args=(client_socket,))
                 hilo.start()
