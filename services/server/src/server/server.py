@@ -78,7 +78,7 @@ class Server:
     def _send_winners(self, agency_id, protocol):
         with self.lottery_lock:
             for bet in self.lottery.load_bets():
-                if self.lottery.has_won(bet) and (agency_id is None or bet.agency_id == agency_id):
+                if self.lottery.has_won(bet) and bet.agency_id == agency_id:
                     protocol.send_winner(bet)
 
     def _have_to_wait_for_quorum(self):
