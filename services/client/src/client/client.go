@@ -12,7 +12,7 @@ import (
 
 const (
 	CONNECTION_ATTEMPTS_MAX     = 3
-	CONNECTION_ATTEMPS_DELAY_MS = 500 // TODO: Change to an appropiate back-off algorithm
+	CONNECTION_ATTEMPS_DELAY_MS = 200
 	NETWORK_PROTOCOL            = "tcp"
 
 	ACTION_CONNECT_TO_SERVER = "connect-to-server"
