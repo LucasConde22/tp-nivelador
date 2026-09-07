@@ -15,9 +15,12 @@ class Server:
         self.server_host = server_host
         self.server_port = server_port
         self.lottery = Lottery(storage_path)
-        self.quorum_barrier = Barrier(agency_quorum_min)
+        self.agency_quorum_min = agency_quorum_min
 
+        self.quorum_barrier = Barrier(agency_quorum_min)
         self.lottery_lock = Lock()
+        self.agencies_ready = 0
+        self.quorum_lock = Lock()
 
     def _handle_client(self, client_socket):
         message_amount = 0
@@ -57,27 +60,33 @@ class Server:
                     logger.error(ACTION_HANDLE_CLIENT, logger.LogResult.fail, "reason", MSG_INVALID_BATCH)
                     break
                 agency_id = data[0].agency_id
-                self.store_bets(data)
+                self._store_bets(data)
                 protocol.send_ack() # Let's the client know that all bets were processed
 
             elif msg_type == MSG_TYPE_REQUEST_WINNERS:
-                self.quorum_barrier.wait()
-                self.send_winners(agency_id, protocol)
+                if self._have_to_wait_for_quorum():
+                    self.quorum_barrier.wait()
+                self._send_winners(agency_id, protocol)
                 break
 
         return message_amount
 
-    def store_bets(self, bets):
+    def _store_bets(self, bets):
         with self.lottery_lock:
             self.lottery.store_bets(bets)
 
-    def send_winners(self, agency_id, protocol):
+    def _send_winners(self, agency_id, protocol):
         with self.lottery_lock:
-            bets = self.lottery.load_bets()
+            for bet in self.lottery.load_bets():
+                if self.lottery.has_won(bet) and (agency_id is None or bet.agency_id == agency_id):
+                    protocol.send_winner(bet)
 
-        for bet in bets:
-            if self.lottery.has_won(bet) and (agency_id is None or bet.agency_id == agency_id):
-                protocol.send_winner(bet)
+    def _have_to_wait_for_quorum(self):
+        with self.quorum_lock:
+            self.agencies_ready += 1
+            if self.agencies_ready > self.agency_quorum_min:
+                return False
+        return True
 
     def run(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
