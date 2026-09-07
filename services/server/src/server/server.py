@@ -1,8 +1,10 @@
 import socket
-from threading import Barrier, Thread, Lock
+from threading import Barrier, BrokenBarrierError, Lock, Thread
 import logger
 from lottery import Lottery
 from .bets_protocol import BetsProtocol, MSG_TYPE_BET, MSG_TYPE_REQUEST_WINNERS, MSG_TYPE_MULTI_BETS
+
+THREADS_TIMEOUT_TIME = 3
 
 STORAGE_PATH = "./bets.csv"
 ACTION_HANDLE_CLIENT = "handle-client"
@@ -22,27 +24,41 @@ class Server:
         self.agencies_ready = 0
         self.quorum_lock = Lock()
 
+        self.running = False
+        self.server_socket = None
+        self.client_sockets = set()
+        self.client_threads = []
+        self.clients_lock = Lock()
+        self.shutdown_lock = Lock()
+
     def _handle_client(self, client_socket):
         message_amount = 0
         try:
             logger.info(ACTION_HANDLE_CLIENT, logger.LogResult.in_progress)
             message_amount = self.process_bets(client_socket, message_amount)
-            logger.info(
-                ACTION_HANDLE_CLIENT,
-                logger.LogResult.success,
-                LOG_FIELD_MESSAGES_AMOUNT,
-                message_amount,
-            )
+            if self.running:
+                logger.info(
+                    ACTION_HANDLE_CLIENT,
+                    logger.LogResult.success,
+                    LOG_FIELD_MESSAGES_AMOUNT,
+                    message_amount,
+                )
         except Exception as e:
-            logger.error(
-                ACTION_HANDLE_CLIENT,
-                logger.LogResult.fail,
-                LOG_FIELD_MESSAGES_AMOUNT,
-                message_amount,
-            )
-            raise e
+            if self.running:
+                logger.error(
+                    ACTION_HANDLE_CLIENT,
+                    logger.LogResult.fail,
+                    LOG_FIELD_MESSAGES_AMOUNT,
+                    message_amount,
+                )
+                raise e
         finally:
-            client_socket.close()
+            with self.clients_lock:
+                self.client_sockets.discard(client_socket)
+            try:
+                client_socket.close()
+            except:
+                pass
 
     def process_bets(self, client_socket, message_amount):
         protocol = BetsProtocol(client_socket)
@@ -65,7 +81,12 @@ class Server:
 
             elif msg_type == MSG_TYPE_REQUEST_WINNERS:
                 if self._have_to_wait_for_quorum():
-                    self.quorum_barrier.wait()
+                    try:
+                        self.quorum_barrier.wait()
+                    except BrokenBarrierError:
+                        break
+                if not self.running:
+                    break
                 self._send_winners(agency_id, protocol)
                 break
 
@@ -89,16 +110,60 @@ class Server:
         return True
 
     def run(self):
+        self.running = True
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
+            server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             server_socket.bind((self.server_host, self.server_port))
             server_socket.listen()
-            while True:
+            self.server_socket = server_socket
+            while self.running:
                 try:
                     logger.info(ACTION_ACCEPT_CONNECTION, logger.LogResult.in_progress)
                     client_socket, _ = server_socket.accept()
                 except Exception as e:
+                    if not self.running:
+                        break
                     logger.error(ACTION_ACCEPT_CONNECTION, logger.LogResult.fail)
                     raise e
                 logger.info(ACTION_ACCEPT_CONNECTION, logger.LogResult.success)
                 hilo = Thread(target=self._handle_client, args=(client_socket,))
+                with self.clients_lock:
+                    self.client_sockets.add(client_socket)
+                    self.client_threads.append(hilo)
                 hilo.start()
+
+        self.stop()
+
+    def stop(self):
+        with self.shutdown_lock:
+            if not self.running:
+                return
+            self.running = False
+
+            try:
+                self.quorum_barrier.abort()
+            except Exception:
+                pass
+
+            if self.server_socket:
+                try:
+                    self.server_socket.close()
+                except Exception:
+                    pass
+
+            with self.clients_lock:
+                for client_socket in list(self.client_sockets):
+                    try:
+                        client_socket.shutdown(socket.SHUT_RDWR)
+                    except Exception:
+                        pass
+                    try:
+                        client_socket.close()
+                    except Exception:
+                        pass
+                self.client_sockets.clear()
+
+            with self.clients_lock:
+                threads = list(self.client_threads)
+            for thread in threads:
+                thread.join(timeout=THREADS_TIMEOUT_TIME)
