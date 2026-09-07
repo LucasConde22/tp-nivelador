@@ -104,7 +104,7 @@ func (betsProtocol *BetsProtocol) receiveWinner() (*Bet, error) {
 func (betsProtocol *BetsProtocol) receiveAck() error {
 	header, err := betsProtocol.receiveHeader()
 	if err != nil {
-		return err
+		return errors.New(MSG_ERROR_DID_NOT_RECEIVE_ACK)
 	}
 
 	msgType := header[HEADER_PAYLOAD_LEN_SIZE]

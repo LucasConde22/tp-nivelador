@@ -1,6 +1,7 @@
 package client
 
 import (
+	"errors"
 	"io"
 	"net"
 	"strconv"
@@ -18,6 +19,8 @@ const (
 	ACTION_PROCESS_BETS      = "process-bets"
 	ACTION_SEND_BETS         = "send-bets"
 	ACTION_RECEIVE_WINNERS   = "receive-winners"
+
+	MSG_ERROR_BATCH_SIZE_MUST_BE_POSITIVE = "BATCH_SIZE must be positive"
 )
 
 type ClientConfig struct {
@@ -86,9 +89,12 @@ func processBets(client *Client) error {
 	}
 
 	batchSize, err := strconv.Atoi(client.config.BatchSize)
-	if err != nil {
-		logger.Error("batchSize", logger.Fail, "err", err, "agency-id", agencyIdStr)
-		return err
+	if err != nil || batchSize <= 0 {
+		logger.Error("batchSize", logger.Fail, "err", err, "agency-id", agencyIdStr, "batch-size", client.config.BatchSize)
+		if err != nil {
+			return err
+		}
+		return errors.New(MSG_ERROR_BATCH_SIZE_MUST_BE_POSITIVE)
 	}
 
 	betsProtocol := NewBetsProtocol(newSocketConnection(client.conn))

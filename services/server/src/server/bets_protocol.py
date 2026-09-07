@@ -87,46 +87,55 @@ class BetsProtocol:
         payload = self._receive_payload(payload_len)
         if payload is None:
             return None
-        return self._deserialize_bets(payload.decode(ENCODING), number_of_bets)
+        bets = self._deserialize_bets(payload.decode(ENCODING), number_of_bets)
+        if bets is None or len(bets) != number_of_bets:
+            return None
+        return bets
 
     def _build_ack_msg(self) -> bytes:
         return (0).to_bytes(HEADER_PAYLOAD_LEN_SIZE, BYTE_ORDER) + bytes([MSG_TYPE_ACK])
 
-    def _deserialize_bet(self, payload: str) -> Bet:
-        parts = payload.split(DELIMITER)
-        return Bet(
-            agency_id=int(parts[0]),
-            first_name=parts[1],
-            last_name=parts[2],
-            document=int(parts[3]),
-            birthdate=parts[4],
-            number=int(parts[5]),
-        )
-
-    def _deserialize_bets(self, payload: str, number_of_bets: int) -> list[Bet]:
-        parts = payload.split(DELIMITER)
-        if not parts or len(parts) < 1:
-            return []
-
-        agency_id = int(parts[0])
-        num_bets = number_of_bets
-        bets = []
-
-        for i in range(num_bets):
-            offset = 1 + i * BET_FIELDS_AMOUNT
-            if offset + BET_FIELDS_AMOUNT > len(parts):
-                break
-            bet = Bet(
-                agency_id=agency_id,
-                first_name=parts[offset],
-                last_name=parts[offset + 1],
-                document=int(parts[offset + 2]),
-                birthdate=parts[offset + 3],
-                number=int(parts[offset + 4]),
+    def _deserialize_bet(self, payload: str) -> Bet | None:
+        try:
+            parts = payload.split(DELIMITER)
+            if len(parts) != BET_PAYLOAD_FIELDS_AMOUNT:
+                return None
+            return Bet(
+                agency_id=int(parts[0]),
+                first_name=parts[1],
+                last_name=parts[2],
+                document=int(parts[3]),
+                birthdate=parts[4],
+                number=int(parts[5]),
             )
-            bets.append(bet)
+        except:
+            return None
 
-        return bets
+    def _deserialize_bets(self, payload: str, number_of_bets: int) -> list[Bet] | None:
+        try:
+            parts = payload.split(DELIMITER)
+            expected_parts = 1 + number_of_bets * BET_FIELDS_AMOUNT
+            if len(parts) != expected_parts:
+                return None
+
+            agency_id = int(parts[0])
+            bets = []
+
+            for i in range(number_of_bets):
+                offset = 1 + i * BET_FIELDS_AMOUNT
+                bet = Bet(
+                    agency_id=agency_id,
+                    first_name=parts[offset],
+                    last_name=parts[offset + 1],
+                    document=int(parts[offset + 2]),
+                    birthdate=parts[offset + 3],
+                    number=int(parts[offset + 4]),
+                )
+                bets.append(bet)
+
+            return bets
+        except:
+            return None
 
     def _serialize_bet(self, bet: Bet) -> bytes:
         payload = f"{bet.agency_id}{DELIMITER}{bet.first_name}{DELIMITER}{bet.last_name}{DELIMITER}{bet.document}{DELIMITER}{bet.birthdate}{DELIMITER}{bet.number}".encode(ENCODING)

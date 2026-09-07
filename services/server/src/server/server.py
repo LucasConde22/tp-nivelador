@@ -7,6 +7,7 @@ STORAGE_PATH = "./bets.csv"
 ACTION_HANDLE_CLIENT = "handle-client"
 ACTION_ACCEPT_CONNECTION = "accept-connection"
 LOG_FIELD_MESSAGES_AMOUNT = "messages-amount"
+MSG_INVALID_BATCH = 'invalid o incomplete batch'
 
 class Server:
     def __init__(self, server_host: str, server_port: int, storage_path: str = STORAGE_PATH) -> None:
@@ -49,8 +50,10 @@ class Server:
             message_amount += 1
 
             if msg_type == MSG_TYPE_BET or msg_type == MSG_TYPE_MULTI_BETS:
-                if isinstance(data, list) and data:
-                    agency_id = data[0].agency_id
+                if not data or not isinstance(data, list):
+                    logger.error(ACTION_HANDLE_CLIENT, logger.LogResult.fail, "reason", MSG_INVALID_BATCH)
+                    break
+                agency_id = data[0].agency_id
                 self.lottery.store_bets(data)
                 protocol.send_ack() # Let's the client know that all bets were processed
 
