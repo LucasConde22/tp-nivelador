@@ -1,4 +1,5 @@
 import socket
+import threading
 import logger
 from lottery import Lottery
 from .bets_protocol import BetsProtocol, MSG_TYPE_BET, MSG_TYPE_REQUEST_WINNERS, MSG_TYPE_MULTI_BETS
@@ -77,5 +78,5 @@ class Server:
                     logger.error(ACTION_ACCEPT_CONNECTION, logger.LogResult.fail)
                     raise e
                 logger.info(ACTION_ACCEPT_CONNECTION, logger.LogResult.success)
-
-                self._handle_client(client_socket)
+                hilo = threading.Thread(target=self._handle_client, args=(client_socket,))
+                hilo.start()
