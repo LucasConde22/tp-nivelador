@@ -31,6 +31,7 @@ func NewBetsIOHandler(agency_id int, InputFile string, OutputFile string) (*Bets
 
 	outputFile, err := os.Create(OutputFile)
 	if err != nil {
+		inputFile.Close()
 		return nil, err
 	}
 

@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net"
@@ -68,17 +69,27 @@ func connectToServer(host, port string) (net.Conn, error) {
 	return conn, err
 }
 
-func (client *Client) Run() error {
+func (client *Client) Close() error {
+	if client.conn != nil {
+		return client.conn.Close()
+	}
+	return nil
+}
+
+func (client *Client) Run(ctx context.Context) error {
 	defer client.conn.Close()
 
-	if err := processBets(client); err != nil {
+	if err := processBets(ctx, client); err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		return err
 	}
 
 	return nil
 }
 
-func processBets(client *Client) error {
+func processBets(ctx context.Context, client *Client) error {
 	const mainAction = ACTION_PROCESS_BETS
 	agencyIdStr := client.config.AgencyId
 
@@ -107,11 +118,11 @@ func processBets(client *Client) error {
 
 	logger.Info(mainAction, logger.InProgress, "agency-id", agencyIdStr)
 
-	if err := sendBets(betsIOHandler, betsProtocol, agencyIdStr, batchSize); err != nil {
+	if err := sendBets(ctx, betsIOHandler, betsProtocol, agencyIdStr, batchSize); err != nil {
 		return err
 	}
 
-	if err := receiveWinners(betsIOHandler, betsProtocol, agencyIdStr); err != nil {
+	if err := receiveWinners(ctx, betsIOHandler, betsProtocol, agencyIdStr); err != nil {
 		return err
 	}
 
@@ -119,7 +130,7 @@ func processBets(client *Client) error {
 	return nil
 }
 
-func sendBets(betsReader *BetsIOHandler, betsProtocol *BetsProtocol, agencyId string, batchSize int) error {
+func sendBets(ctx context.Context, betsReader *BetsIOHandler, betsProtocol *BetsProtocol, agencyId string, batchSize int) error {
 	const action = ACTION_SEND_BETS
 	logger.Info(action, logger.InProgress, "agency-id", agencyId)
 
@@ -128,6 +139,12 @@ func sendBets(betsReader *BetsIOHandler, betsProtocol *BetsProtocol, agencyId st
 	allSent := false
 
 	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
 		betsToSend = betsToSend[:0] // Resets lenght to 0 but keeping its capacity
 
 		for len(betsToSend) < batchSize {
@@ -146,6 +163,9 @@ func sendBets(betsReader *BetsIOHandler, betsProtocol *BetsProtocol, agencyId st
 
 		if len(betsToSend) > 0 {
 			if err := betsProtocol.SendBets(betsToSend); err != nil {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
 				logger.Error("send-bet", logger.Fail, "err", err, "agency-id", agencyId)
 				return err
 			}
@@ -162,17 +182,23 @@ func sendBets(betsReader *BetsIOHandler, betsProtocol *BetsProtocol, agencyId st
 	return nil
 }
 
-func receiveWinners(betsWriter *BetsIOHandler, betsProtocol *BetsProtocol, agencyId string) error {
+func receiveWinners(ctx context.Context, betsWriter *BetsIOHandler, betsProtocol *BetsProtocol, agencyId string) error {
 	const action = ACTION_RECEIVE_WINNERS
 	logger.Info(action, logger.InProgress, "agency-id", agencyId)
 
 	winners, err := betsProtocol.ReceiveWinners()
 	if err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		logger.Error("receive-winners", logger.Fail, "err", err, "agency-id", agencyId)
 		return err
 	}
 
 	for _, winner := range winners {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		if err := betsWriter.WriteBet(winner); err != nil {
 			logger.Error("write-winner", logger.Fail, "err", err, "agency-id", agencyId)
 			return err
