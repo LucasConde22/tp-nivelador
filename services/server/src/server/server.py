@@ -1,5 +1,5 @@
 import socket
-from threading import Barrier, Thread
+from threading import Barrier, Thread, Lock
 import logger
 from lottery import Lottery
 from .bets_protocol import BetsProtocol, MSG_TYPE_BET, MSG_TYPE_REQUEST_WINNERS, MSG_TYPE_MULTI_BETS
@@ -16,6 +16,8 @@ class Server:
         self.server_port = server_port
         self.lottery = Lottery(storage_path)
         self.quorum_barrier = Barrier(agency_quorum_min)
+
+        self.lottery_lock = Lock()
 
     def _handle_client(self, client_socket):
         message_amount = 0
@@ -55,17 +57,27 @@ class Server:
                     logger.error(ACTION_HANDLE_CLIENT, logger.LogResult.fail, "reason", MSG_INVALID_BATCH)
                     break
                 agency_id = data[0].agency_id
-                self.lottery.store_bets(data)
+                self.store_bets(data)
                 protocol.send_ack() # Let's the client know that all bets were processed
 
             elif msg_type == MSG_TYPE_REQUEST_WINNERS:
                 self.quorum_barrier.wait()
-                for bet in self.lottery.load_bets():
-                    if self.lottery.has_won(bet) and (agency_id is None or bet.agency_id == agency_id):
-                        protocol.send_winner(bet)
+                self.send_winners(agency_id, protocol)
                 break
 
         return message_amount
+
+    def store_bets(self, bets):
+        with self.lottery_lock:
+            self.lottery.store_bets(bets)
+
+    def send_winners(self, agency_id, protocol):
+        with self.lottery_lock:
+            bets = self.lottery.load_bets()
+
+        for bet in bets:
+            if self.lottery.has_won(bet) and (agency_id is None or bet.agency_id == agency_id):
+                protocol.send_winner(bet)
 
     def run(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
