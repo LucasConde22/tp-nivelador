@@ -51,13 +51,12 @@ class Server:
                     LOG_FIELD_MESSAGES_AMOUNT,
                     message_amount,
                 )
-                raise e
         finally:
             with self.clients_lock:
                 self.client_sockets.discard(client_socket)
             try:
                 client_socket.close()
-            except:
+            except OSError:
                 pass
 
     def process_bets(self, client_socket, message_amount):
@@ -97,10 +96,13 @@ class Server:
             self.lottery.store_bets(bets)
 
     def _send_winners(self, agency_id, protocol):
+        winners = []
         with self.lottery_lock:
             for bet in self.lottery.load_bets():
                 if self.lottery.has_won(bet) and bet.agency_id == agency_id:
-                    protocol.send_winner(bet)
+                    winners.append(bet)
+        for bet in winners:
+            protocol.send_winner(bet)
 
     def _have_to_wait_for_quorum(self):
         with self.quorum_lock:

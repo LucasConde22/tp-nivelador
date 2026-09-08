@@ -58,8 +58,14 @@ func (reader BetsIOHandler) ReadNextBet() (*Bet, error) {
 
 func (reader *BetsIOHandler) WriteBet(bet *Bet) error {
 	line := fmt.Sprintf("%s%s%s%s%d%s%s%s%d\n", bet.first_name, CSV_SEPARATOR, bet.last_name, CSV_SEPARATOR, bet.document, CSV_SEPARATOR, bet.birthdate, CSV_SEPARATOR, bet.number)
-	_, err := reader.output_file.WriteString(line)
-	return err
+	n, err := reader.output_file.WriteString(line)
+	if err != nil {
+		return err
+	}
+	if n < len(line) {
+		return io.ErrShortWrite
+	}
+	return nil
 }
 
 func (reader *BetsIOHandler) Close() error {

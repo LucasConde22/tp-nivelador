@@ -108,7 +108,7 @@ class BetsProtocol:
                 birthdate=parts[4],
                 number=int(parts[5]),
             )
-        except:
+        except (ValueError, IndexError):
             return None
 
     def _deserialize_bets(self, payload: str, number_of_bets: int) -> list[Bet] | None:
@@ -134,7 +134,7 @@ class BetsProtocol:
                 bets.append(bet)
 
             return bets
-        except:
+        except (ValueError, IndexError):
             return None
 
     def _serialize_bet(self, bet: Bet) -> bytes:
