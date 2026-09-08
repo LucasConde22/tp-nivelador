@@ -1,5 +1,5 @@
 import socket
-from threading import Barrier, BrokenBarrierError, Lock, Thread
+from threading import Condition, Lock, Thread
 import logger
 from lottery import Lottery
 from .bets_protocol import BetsProtocol, MSG_TYPE_BET, MSG_TYPE_REQUEST_WINNERS, MSG_TYPE_MULTI_BETS
@@ -19,10 +19,10 @@ class Server:
         self.lottery = Lottery(storage_path)
         self.agency_quorum_min = agency_quorum_min
 
-        self.quorum_barrier = Barrier(agency_quorum_min)
+        self.quorum_condition = Condition()
         self.lottery_lock = Lock()
         self.agencies_ready = 0
-        self.quorum_lock = Lock()
+        self.quorum_reached = False
 
         self.running = False
         self.server_socket = None
@@ -50,6 +50,8 @@ class Server:
                     logger.LogResult.fail,
                     LOG_FIELD_MESSAGES_AMOUNT,
                     message_amount,
+                    "err",
+                    e,
                 )
         finally:
             with self.clients_lock:
@@ -79,11 +81,7 @@ class Server:
                 protocol.send_ack() # Let's the client know that all bets were processed
 
             elif msg_type == MSG_TYPE_REQUEST_WINNERS:
-                if self._have_to_wait_for_quorum():
-                    try:
-                        self.quorum_barrier.wait()
-                    except BrokenBarrierError:
-                        break
+                self._wait_for_quorum()
                 if not self.running:
                     break
                 self._send_winners(agency_id, protocol)
@@ -104,12 +102,15 @@ class Server:
         for bet in winners:
             protocol.send_winner(bet)
 
-    def _have_to_wait_for_quorum(self):
-        with self.quorum_lock:
+    def _wait_for_quorum(self):
+        with self.quorum_condition:
             self.agencies_ready += 1
-            if self.agencies_ready > self.agency_quorum_min:
-                return False
-        return True
+            if self.agencies_ready >= self.agency_quorum_min:
+                self.quorum_reached = True
+                self.quorum_condition.notify_all()
+
+            while not self.quorum_reached and self.running:
+                self.quorum_condition.wait()
 
     def run(self):
         self.running = True
@@ -142,10 +143,8 @@ class Server:
                 return
             self.running = False
 
-            try:
-                self.quorum_barrier.abort()
-            except Exception:
-                pass
+            with self.quorum_condition:
+                self.quorum_condition.notify_all()
 
             if self.server_socket:
                 try:
