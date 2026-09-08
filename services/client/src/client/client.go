@@ -24,6 +24,7 @@ const (
 	MSG_ERROR_BATCH_SIZE_MUST_BE_POSITIVE = "BATCH_SIZE must be positive"
 )
 
+// ClientConfig holds the configuration for the client, including server details and file paths.
 type ClientConfig struct {
 	ServerHost string
 	ServerPort string
@@ -33,11 +34,13 @@ type ClientConfig struct {
 	BatchSize  string
 }
 
+// Client represents a client that connects to a server to send bets and receive winners.
 type Client struct {
 	conn   net.Conn
 	config ClientConfig
 }
 
+// NewClient creates a new Client instance with the given configuration and establishes a connection to the server.
 func NewClient(config ClientConfig) (*Client, error) {
 	conn, err := connectToServer(config.ServerHost, config.ServerPort)
 	if err != nil {
@@ -49,6 +52,7 @@ func NewClient(config ClientConfig) (*Client, error) {
 	return client, nil
 }
 
+// connectToServer establishes a TCP connection to the server at the specified host and port, retrying up to a maximum number of attempts.
 func connectToServer(host, port string) (net.Conn, error) {
 	var err error
 	var conn net.Conn
@@ -69,6 +73,7 @@ func connectToServer(host, port string) (net.Conn, error) {
 	return conn, err
 }
 
+// Close closes the client's connection to the server.
 func (client *Client) Close() error {
 	if client.conn != nil {
 		return client.conn.Close()
@@ -76,6 +81,7 @@ func (client *Client) Close() error {
 	return nil
 }
 
+// Run executes the main logic of the client, processing bets and handling communication with the server.
 func (client *Client) Run(ctx context.Context) error {
 	defer client.conn.Close()
 
@@ -89,6 +95,7 @@ func (client *Client) Run(ctx context.Context) error {
 	return nil
 }
 
+// processBets handles the reading of bets from the input file, sending them to the server, and receiving the winners, writing them to the output file.
 func processBets(ctx context.Context, client *Client) error {
 	const mainAction = ACTION_PROCESS_BETS
 	agencyIdStr := client.config.AgencyId
@@ -130,6 +137,7 @@ func processBets(ctx context.Context, client *Client) error {
 	return nil
 }
 
+// sendBets reads bets from the input file and sends them to the server in batches.
 func sendBets(ctx context.Context, betsReader *BetsIOHandler, betsProtocol *BetsProtocol, agencyId string, batchSize int) error {
 	const action = ACTION_SEND_BETS
 	logger.Info(action, logger.InProgress, "agency-id", agencyId)
@@ -182,6 +190,7 @@ func sendBets(ctx context.Context, betsReader *BetsIOHandler, betsProtocol *Bets
 	return nil
 }
 
+// receiveWinners requests and receives the list of winning bets from the server, writing them in the output file.
 func receiveWinners(ctx context.Context, betsWriter *BetsIOHandler, betsProtocol *BetsProtocol, agencyId string) error {
 	const action = ACTION_RECEIVE_WINNERS
 	logger.Info(action, logger.InProgress, "agency-id", agencyId)

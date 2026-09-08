@@ -25,6 +25,9 @@ class BetsProtocol:
         self.socket = socket
 
     def receive_message(self):
+        """
+        Receives a message from the client.
+        """
         payload_len, msg_type = self._receive_header()
         if msg_type is None or payload_len is None:
             return None, None
@@ -48,14 +51,23 @@ class BetsProtocol:
         return msg_type, payload
 
     def send_winner(self, bet: Bet) -> int | None:
+        """
+        Sends a winner message to the client.
+        """
         msg = self._serialize_bet(bet)
         safe_socket.send_all(self.socket, msg)
 
     def send_ack(self) -> int | None:
+        """
+        Sends an acknowledgment message to the client.
+        """
         msg = self._build_ack_msg()
         safe_socket.send_all(self.socket, msg)
 
     def _receive_header(self) -> tuple[int, int] | tuple[None, None]:
+        """
+        Receives the header of a message from the client.
+        """
         header = safe_socket.recv_all(self.socket, HEADER_SIZE)
         if not header or len(header) < HEADER_SIZE:
             return None, None
@@ -65,6 +77,9 @@ class BetsProtocol:
         return payload_len, msg_type
 
     def _receive_payload(self, payload_len: int) -> bytes | None:
+        """
+        Receives the payload of a message from the client.
+        """
         if payload_len == 0:
             return b""
         payload = safe_socket.recv_all(self.socket, payload_len)
@@ -73,12 +88,18 @@ class BetsProtocol:
         return payload
 
     def _receive_bet(self, payload_len: int) -> Bet | None:
+        """
+        Receives a single bet from the client.
+        """
         payload = self._receive_payload(payload_len)
         if payload is None:
             return None
         return self._deserialize_bet(payload.decode(ENCODING))
 
     def _receive_multi_bets(self, payload_len: int) -> list[Bet] | None:
+        """
+        Receives multiple bets from the client.
+        """
         num_bets_bytes = safe_socket.recv_all(self.socket, HEADER_NO_BETS_SIZE)
         if not num_bets_bytes or len(num_bets_bytes) < HEADER_NO_BETS_SIZE:
             return None
@@ -93,9 +114,15 @@ class BetsProtocol:
         return bets
 
     def _build_ack_msg(self) -> bytes:
+        """
+        Builds an ack message to be sent to the client.
+        """
         return (0).to_bytes(HEADER_PAYLOAD_LEN_SIZE, BYTE_ORDER) + bytes([MSG_TYPE_ACK])
 
     def _deserialize_bet(self, payload: str) -> Bet | None:
+        """
+        Deserializes a bet from a string.
+        """
         try:
             parts = payload.split(DELIMITER)
             if len(parts) != BET_PAYLOAD_FIELDS_AMOUNT:
@@ -112,6 +139,9 @@ class BetsProtocol:
             return None
 
     def _deserialize_bets(self, payload: str, number_of_bets: int) -> list[Bet] | None:
+        """
+        Deserializes multiple bets from a string.
+        """
         try:
             parts = payload.split(DELIMITER)
             expected_parts = 1 + number_of_bets * BET_FIELDS_AMOUNT
@@ -138,6 +168,9 @@ class BetsProtocol:
             return None
 
     def _serialize_bet(self, bet: Bet) -> bytes:
+        """
+        Serializes a bet into bytes.
+        """
         payload = f"{bet.agency_id}{DELIMITER}{bet.first_name}{DELIMITER}{bet.last_name}{DELIMITER}{bet.document}{DELIMITER}{bet.birthdate}{DELIMITER}{bet.number}".encode(ENCODING)
         header = len(payload).to_bytes(HEADER_PAYLOAD_LEN_SIZE, BYTE_ORDER) + bytes([MSG_TYPE_WINNER])
         return header + payload

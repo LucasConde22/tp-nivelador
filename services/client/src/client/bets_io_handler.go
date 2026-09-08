@@ -23,6 +23,7 @@ type BetsIOHandler struct {
 	scanner     *bufio.Scanner
 }
 
+// NewBetsIOHandler creates a new BetsIOHandler for reading and writing bets to files.
 func NewBetsIOHandler(agency_id int, InputFile string, OutputFile string) (*BetsIOHandler, error) {
 	inputFile, err := os.Open(InputFile)
 	if err != nil {
@@ -45,6 +46,7 @@ func NewBetsIOHandler(agency_id int, InputFile string, OutputFile string) (*Bets
 	}, nil
 }
 
+// ReadNextBet reads the next bet from the input file and returns it as a Bet struct.
 func (reader BetsIOHandler) ReadNextBet() (*Bet, error) {
 	if reader.scanner.Scan() {
 		readBet := reader.scanner.Text()
@@ -56,6 +58,7 @@ func (reader BetsIOHandler) ReadNextBet() (*Bet, error) {
 	return nil, io.EOF
 }
 
+// WriteBet writes a Bet struct to the output file in CSV format.
 func (reader *BetsIOHandler) WriteBet(bet *Bet) error {
 	line := fmt.Sprintf("%s%s%s%s%d%s%s%s%d\n", bet.first_name, CSV_SEPARATOR, bet.last_name, CSV_SEPARATOR, bet.document, CSV_SEPARATOR, bet.birthdate, CSV_SEPARATOR, bet.number)
 	n, err := reader.output_file.WriteString(line)
@@ -68,6 +71,7 @@ func (reader *BetsIOHandler) WriteBet(bet *Bet) error {
 	return nil
 }
 
+// Close closes the input and output files associated with the BetsIOHandler.
 func (reader *BetsIOHandler) Close() error {
 	errInput := reader.input_file.Close()
 	errOutput := reader.output_file.Close()
@@ -78,6 +82,7 @@ func (reader *BetsIOHandler) Close() error {
 	return errOutput
 }
 
+// newBetFromText creates a new Bet struct from a line of text read from the input file.
 func (reader BetsIOHandler) newBetFromText(readBet string) (*Bet, error) {
 	line := strings.TrimSpace(readBet)
 	if line == "" {

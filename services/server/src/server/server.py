@@ -32,6 +32,9 @@ class Server:
         self.shutdown_lock = Lock()
 
     def _handle_client(self, client_socket):
+        """
+        Handles the communication with a connected client, processing bets and requests for winners.
+        """
         message_amount = 0
         try:
             logger.info(ACTION_HANDLE_CLIENT, logger.LogResult.in_progress)
@@ -62,6 +65,10 @@ class Server:
                 pass
 
     def process_bets(self, client_socket, message_amount):
+        """
+        Processes incoming bets and requests for winners from a connected client, storing bets and
+        sending winners.
+        """
         protocol = BetsProtocol(client_socket)
         agency_id = None
 
@@ -90,10 +97,16 @@ class Server:
         return message_amount
 
     def _store_bets(self, bets):
+        """
+        Stores the provided bets in the lottery.
+        """
         with self.lottery_lock:
             self.lottery.store_bets(bets)
 
     def _send_winners(self, agency_id, protocol):
+        """
+        Sends the winners for the specified agency to the client.
+        """
         winners = []
         with self.lottery_lock:
             for bet in self.lottery.load_bets():
@@ -103,6 +116,9 @@ class Server:
             protocol.send_winner(bet)
 
     def _wait_for_quorum(self):
+        """
+        Waits for the quorum of agencies to be reached.
+        """
         with self.quorum_condition:
             self.agencies_ready += 1
             if self.agencies_ready >= self.agency_quorum_min:

@@ -29,14 +29,17 @@ const (
 	MSG_ERROR_DID_NOT_RECEIVE_ACK = "Didn't receive ack message"
 )
 
+// BetsProtocol handles the communication protocol for sending and receiving bets over a connection.
 type BetsProtocol struct {
 	conn Connection
 }
 
+// NewBetsProtocol creates a new BetsProtocol instance with the given connection.
 func NewBetsProtocol(conn Connection) *BetsProtocol {
 	return &BetsProtocol{conn}
 }
 
+// SendBet sends a single bet over the connection.
 func (betsProtocol *BetsProtocol) SendBet(bet *Bet) error { // Used for exercise 5
 	message := betsProtocol.buildBetMessage(bet)
 	if message == nil {
@@ -46,6 +49,7 @@ func (betsProtocol *BetsProtocol) SendBet(bet *Bet) error { // Used for exercise
 	return betsProtocol.conn.SendAll(message)
 }
 
+// SendBets sends multiple bets over the connection.
 func (betsProtocol *BetsProtocol) SendBets(bets []*Bet) error {
 	message := betsProtocol.buildBetsMessage(bets)
 	if message == nil {
@@ -59,6 +63,7 @@ func (betsProtocol *BetsProtocol) SendBets(bets []*Bet) error {
 	return betsProtocol.receiveAck()
 }
 
+// ReceiveWinners requests and receives the list of winning bets from the server.
 func (betsProtocol *BetsProtocol) ReceiveWinners() ([]*Bet, error) {
 	if err := betsProtocol.requestWinners(); err != nil {
 		return nil, err
@@ -80,11 +85,13 @@ func (betsProtocol *BetsProtocol) ReceiveWinners() ([]*Bet, error) {
 	return winners, nil
 }
 
+// requestWinners sends a request to the server to get the list of winning bets.
 func (betsProtocol *BetsProtocol) requestWinners() error {
 	message := betsProtocol.buildRequestWinnersMessage()
 	return betsProtocol.conn.SendAll(message)
 }
 
+// receiveWinner receives a single winning bet from the server.
 func (betsProtocol *BetsProtocol) receiveWinner() (*Bet, error) {
 	header, err := betsProtocol.receiveHeader()
 	if err != nil {
@@ -101,6 +108,7 @@ func (betsProtocol *BetsProtocol) receiveWinner() (*Bet, error) {
 	return betsProtocol.parseBetFromPayload(string(payloadBytes))
 }
 
+// receiveAck waits for an ack message from the server after sending bets.
 func (betsProtocol *BetsProtocol) receiveAck() error {
 	header, err := betsProtocol.receiveHeader()
 	if err != nil {
@@ -116,10 +124,12 @@ func (betsProtocol *BetsProtocol) receiveAck() error {
 	return errors.New(MSG_ERROR_DID_NOT_RECEIVE_ACK)
 }
 
+// receiveHeader receives the header of a message from the server, which includes the payload length and message type.
 func (betsProtocol *BetsProtocol) receiveHeader() ([]byte, error) {
 	return betsProtocol.conn.RecvAll(HEADER_SIZE)
 }
 
+// parseBetFromPayload parses a Bet struct from a payload string received from the server.
 func (BetsProtocol) parseBetFromPayload(payload string) (*Bet, error) {
 	parts := strings.Split(payload, DELIMITER)
 	if len(parts) != BET_PAYLOAD_PARTS_AMOUNT {
@@ -156,6 +166,7 @@ func (BetsProtocol) parseBetFromPayload(payload string) (*Bet, error) {
 	}, nil
 }
 
+// formatBetFields formats the fields of a Bet struct into a string to send.
 func (BetsProtocol) formatBetFields(bet *Bet) string {
 	return fmt.Sprintf("%s%s%s%s%d%s%s%s%d",
 		bet.first_name,
@@ -170,6 +181,7 @@ func (BetsProtocol) formatBetFields(bet *Bet) string {
 	)
 }
 
+// buildBetMessage constructs a message to send a single bet over the connection, including the header and payload.
 func (betsProtocol BetsProtocol) buildBetMessage(bet *Bet) []byte {
 	if bet == nil {
 		return nil
@@ -188,6 +200,7 @@ func (betsProtocol BetsProtocol) buildBetMessage(bet *Bet) []byte {
 	return message
 }
 
+// buildBetsMessage constructs a message to send multiple bets over the connection, including the header and payload.
 func (betsProtocol BetsProtocol) buildBetsMessage(bets []*Bet) []byte {
 	if len(bets) == 0 {
 		return nil
@@ -213,6 +226,7 @@ func (betsProtocol BetsProtocol) buildBetsMessage(bets []*Bet) []byte {
 	return message
 }
 
+// buildRequestWinnersMessage constructs a message to request the list of winning bets from the server.
 func (BetsProtocol) buildRequestWinnersMessage() []byte {
 	message := make([]byte, HEADER_SIZE)
 	insertUint32IntoByteArray(message[0:HEADER_PAYLOAD_LEN_SIZE], 0) // payloadLen = 0 (there's no payload)
@@ -220,10 +234,12 @@ func (BetsProtocol) buildRequestWinnersMessage() []byte {
 	return message
 }
 
+// extractUint32FromByteArray extracts a uint32 integer from a byte array.
 func extractUint32FromByteArray(array []byte) uint32 {
 	return uint32(array[0])<<24 | uint32(array[1])<<16 | uint32(array[2])<<8 | uint32(array[3])
 }
 
+// insertUint32IntoByteArray inserts a uint32 integer into a byte array.
 func insertUint32IntoByteArray(array []byte, integer uint32) {
 	array[0] = byte(integer >> 24)
 	array[1] = byte(integer >> 16)
